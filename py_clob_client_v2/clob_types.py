@@ -1,9 +1,9 @@
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 from dataclasses import dataclass, field, asdict
 from json import dumps
 from typing import Literal
 
-from .constants import ZERO_ADDRESS
+from .constants import ZERO_ADDRESS, BYTES32_ZERO
 
 
 class OrderType(enumerate):
@@ -35,7 +35,9 @@ class BookParams:
 
 
 @dataclass
-class OrderArgs:
+class OrderArgsV1:
+    """Input for creating a V1 (legacy) limit order."""
+
     token_id: str
     """TokenID of the Conditional token asset being traded"""
 
@@ -51,12 +53,81 @@ class OrderArgs:
     expiration: int = 0
     """Timestamp after which the order is expired"""
 
-    builder_code: str = ZERO_ADDRESS
+    fee_rate_bps: int = 0
+    """Fee rate in basis points charged to the order maker"""
+
+    nonce: int = 0
+    """Nonce used for onchain cancellations"""
+
+    taker: str = ZERO_ADDRESS
+    """Address of the order taker. Zero address = public order"""
+
+    builder_code: str = BYTES32_ZERO
     """Builder code (bytes32) for builder fee attribution"""
 
 
 @dataclass
-class MarketOrderArgs:
+class OrderArgsV2:
+    """Input for creating a V2 limit order."""
+
+    token_id: str
+    """TokenID of the Conditional token asset being traded"""
+
+    price: float
+    """Price used to create the order"""
+
+    size: float
+    """Size in terms of the ConditionalToken"""
+
+    side: str
+    """Side of the order"""
+
+    expiration: int = 0
+    """Timestamp after which the order is expired"""
+
+    builder_code: str = BYTES32_ZERO
+    """Builder code (bytes32) for builder fee attribution"""
+
+
+# Alias: default to V2
+OrderArgs = OrderArgsV2
+
+
+@dataclass
+class MarketOrderArgsV1:
+    """Input for creating a V1 (legacy) market order."""
+
+    token_id: str
+    """TokenID of the Conditional token asset being traded"""
+
+    amount: float
+    """BUY orders: $$$ Amount to buy. SELL orders: Shares to sell"""
+
+    side: str
+    """Side of the order"""
+
+    price: float = 0
+    """Price used to create the order (auto-calculated if not provided)"""
+
+    order_type: OrderType = OrderType.FOK
+
+    fee_rate_bps: int = 0
+    """Fee rate in basis points charged to the order maker"""
+
+    nonce: int = 0
+    """Nonce used for onchain cancellations"""
+
+    taker: str = ZERO_ADDRESS
+    """Address of the order taker. Zero address = public order"""
+
+    builder_code: str = BYTES32_ZERO
+    """Builder code (bytes32) for builder fee attribution"""
+
+
+@dataclass
+class MarketOrderArgsV2:
+    """Input for creating a V2 market order."""
+
     token_id: str
     """TokenID of the Conditional token asset being traded"""
 
@@ -72,10 +143,14 @@ class MarketOrderArgs:
     order_type: OrderType = OrderType.FOK
 
     user_usdc_balance: float = 0
-    """User USDC balance, used to adjust for platform fees on market buy orders"""
+    """User USDC balance, used to adjust fees on market buy orders"""
 
-    builder_code: str = ZERO_ADDRESS
+    builder_code: str = BYTES32_ZERO
     """Builder code (bytes32) for builder fee attribution"""
+
+
+# Alias: default to V2
+MarketOrderArgs = MarketOrderArgsV2
 
 
 @dataclass
@@ -263,10 +338,62 @@ class MarketDetails:
 
 
 @dataclass
-class PostOrdersArgs:
-    order: Any
+class PostOrdersV1Args:
+    order: Any  # SignedOrderV1
     orderType: OrderType = OrderType.GTC
-    postOnly: bool = False
+    deferExec: bool = False
+
+
+@dataclass
+class PostOrdersV2Args:
+    order: Any  # SignedOrderV2
+    orderType: OrderType = OrderType.GTC
+    deferExec: bool = False
+
+
+# Union alias
+PostOrdersArgs = Union[PostOrdersV1Args, PostOrdersV2Args]
+
+
+@dataclass
+class BanStatus:
+    closed_only: bool = False
+
+
+@dataclass
+class OrderScoring:
+    scoring: bool = False
+
+
+@dataclass
+class BuilderTradeParams:
+    builder_code: str
+    id: str = None
+    maker_address: str = None
+    market: str = None
+    asset_id: str = None
+    before: str = None
+    after: str = None
+
+
+@dataclass
+class OrderMarketCancelParams:
+    market: str = None
+    asset_id: str = None
+
+
+@dataclass
+class BuilderApiKey:
+    key: str
+    secret: str
+    passphrase: str
+
+
+@dataclass
+class BuilderApiKeyResponse:
+    key: str
+    created_at: Optional[str] = None
+    revoked_at: Optional[str] = None
 
 
 @dataclass

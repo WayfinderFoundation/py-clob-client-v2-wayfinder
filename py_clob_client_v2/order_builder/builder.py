@@ -40,7 +40,6 @@ ROUNDING_CONFIG: dict = {
     "0.0001": RoundConfig(price=4, size=2, amount=6),
 }
 
-
 class OrderBuilder:
     def __init__(
         self,
@@ -58,10 +57,6 @@ class OrderBuilder:
         # Address which holds funds. Defaults to the signer address.
         # Used for Polymarket proxy wallets and other smart contract wallets.
         self.funder = funder if funder is not None else self.signer.address()
-
-    # ------------------------------------------------------------------
-    # Amount calculation helpers
-    # ------------------------------------------------------------------
 
     def get_order_amounts(
         self, side: str, size: float, price: float, round_config: RoundConfig
@@ -121,10 +116,6 @@ class OrderBuilder:
 
         else:
             raise ValueError(f"order_args.side must be '{BUY}' or '{SELL}'")
-
-    # ------------------------------------------------------------------
-    # Order creation
-    # ------------------------------------------------------------------
 
     def build_order(
         self,
@@ -277,10 +268,6 @@ class OrderBuilder:
 
         else:
             raise ValueError(f"unsupported order version {version}")
-
-    # ------------------------------------------------------------------
-    # Market price calculation
-    # ------------------------------------------------------------------
 
     def calculate_buy_market_price(
         self,

@@ -5,8 +5,8 @@ from eth_account.messages import encode_typed_data
 from eth_utils import keccak as _keccak
 
 
-def __hash_message(msg) -> bytes:
-    return _keccak(primitive=msg.version + msg.header + msg.body)
+def _hash_message(msg) -> bytes:
+    return _keccak(primitive=b"\x19" + msg.version + msg.header + msg.body)
 
 from ..signer import Signer
 from ..constants import BYTES32_ZERO

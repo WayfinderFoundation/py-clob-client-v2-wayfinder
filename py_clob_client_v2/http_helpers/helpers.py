@@ -22,7 +22,6 @@ PUT = "PUT"
 
 _http_client = httpx.Client(http2=True)
 
-
 def _overload_headers(method: str, headers: dict) -> dict:
     if headers is None:
         headers = {}
@@ -33,7 +32,6 @@ def _overload_headers(method: str, headers: dict) -> dict:
     if method == GET:
         headers["Accept-Encoding"] = "gzip"
     return headers
-
 
 def _is_transient_error(exc: Exception, status_code: int = None) -> bool:
     """
@@ -46,7 +44,6 @@ def _is_transient_error(exc: Exception, status_code: int = None) -> bool:
         exc,
         (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError),
     )
-
 
 def request(endpoint: str, method: str, headers=None, data=None, params=None):
     headers = _overload_headers(method, headers)
@@ -88,10 +85,8 @@ def request(endpoint: str, method: str, headers=None, data=None, params=None):
         logger.error("[py_clob_client_v2] request error: %s", exc)
         raise PolyApiException(error_msg="Request exception!")
 
-
 def get(endpoint, headers=None, data=None, params=None):
     return request(endpoint, GET, headers, data, params)
-
 
 def post(endpoint, headers=None, data=None, params=None, retry_on_error: bool = False):
     try:
@@ -104,26 +99,17 @@ def post(endpoint, headers=None, data=None, params=None, retry_on_error: bool = 
             return request(endpoint, POST, headers, data, params)
         raise
 
-
 def delete(endpoint, headers=None, data=None, params=None):
     return request(endpoint, DELETE, headers, data, params)
 
-
 def put(endpoint, headers=None, data=None, params=None):
     return request(endpoint, PUT, headers, data, params)
-
-
-# ---------------------------------------------------------------------------
-# Query-param builders
-# ---------------------------------------------------------------------------
-
 
 def build_query_params(url: str, param: str, val) -> str:
     last = url[-1]
     if last == "?":
         return "{}{}={}".format(url, param, val)
     return "{}&{}={}".format(url, param, val)
-
 
 def add_query_trade_params(
     base_url: str, params: TradeParams = None, next_cursor: str = "MA=="
@@ -161,7 +147,6 @@ def add_query_trade_params(
         url = build_query_params(url, "next_cursor", next_cursor)
     return url
 
-
 def add_query_open_orders_params(
     base_url: str, params: OpenOrderParams = None, next_cursor: str = "MA=="
 ) -> str:
@@ -182,7 +167,6 @@ def add_query_open_orders_params(
         url = build_query_params(url, "next_cursor", next_cursor)
     return url
 
-
 def drop_notifications_query_params(
     base_url: str, params: DropNotificationParams = None
 ) -> str:
@@ -191,7 +175,6 @@ def drop_notifications_query_params(
         url = url + "?"
         url = build_query_params(url, "ids", ",".join(params.ids))
     return url
-
 
 def add_balance_allowance_params_to_url(
     base_url: str, params: BalanceAllowanceParams = None
@@ -207,7 +190,6 @@ def add_balance_allowance_params_to_url(
             url = build_query_params(url, "signature_type", params.signature_type)
     return url
 
-
 def add_order_scoring_params_to_url(
     base_url: str, params: OrderScoringParams = None
 ) -> str:
@@ -216,7 +198,6 @@ def add_order_scoring_params_to_url(
         url = url + "?"
         url = build_query_params(url, "order_id", params.orderId)
     return url
-
 
 def add_orders_scoring_params_to_url(
     base_url: str, params: OrdersScoringParams = None
@@ -227,14 +208,12 @@ def add_orders_scoring_params_to_url(
         url = build_query_params(url, "order_ids", ",".join(params.orderIds))
     return url
 
-
 def parse_orders_scoring_params(params: OrdersScoringParams = None) -> dict:
     """Returns a query-params dict for the orders-scoring endpoint."""
     result = {}
     if params and params.orderIds:
         result["order_ids"] = ",".join(params.orderIds)
     return result
-
 
 def parse_drop_notification_params(params: DropNotificationParams = None) -> dict:
     """Returns a query-params dict for the drop-notifications endpoint."""

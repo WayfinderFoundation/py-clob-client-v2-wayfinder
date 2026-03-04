@@ -115,11 +115,9 @@ from .utilities import (
 
 logger = logging.getLogger(__name__)
 
-
 def _is_v2_order(order) -> bool:
     """Returns True if order is a V2 signed order (has timestamp field)."""
     return hasattr(order, "timestamp")
-
 
 class ClobClient:
     def __init__(
@@ -163,10 +161,6 @@ class ClobClient:
 
         self.rfq = RfqClient(self)
 
-    # ------------------------------------------------------------------
-    # Auth helpers
-    # ------------------------------------------------------------------
-
     def _get_client_mode(self) -> int:
         if self.signer is None:
             return L0
@@ -192,10 +186,6 @@ class ClobClient:
         self.creds = creds
         self.mode = self._get_client_mode()
 
-    # ------------------------------------------------------------------
-    # Internal HTTP helpers
-    # ------------------------------------------------------------------
-
     def _geo_params(self, params: dict = None) -> dict:
         p = params or {}
         if self.geo_block_token:
@@ -217,10 +207,6 @@ class ClobClient:
     def _delete(self, endpoint: str, headers=None, data=None, params: dict = None):
         return delete(endpoint, headers=headers, data=data, params=self._geo_params(params))
 
-    # ------------------------------------------------------------------
-    # Timestamp helper for use_server_time
-    # ------------------------------------------------------------------
-
     def _get_timestamp(self) -> Optional[int]:
         if not self.use_server_time:
             return None
@@ -228,10 +214,6 @@ class ClobClient:
         if isinstance(result, dict):
             return result.get("time") or result.get("timestamp")
         return int(result)
-
-    # ------------------------------------------------------------------
-    # Header builders
-    # ------------------------------------------------------------------
 
     def _l1_headers(self, nonce: int = None) -> dict:
         self.assert_level_1_auth()
@@ -252,10 +234,6 @@ class ClobClient:
         return create_level_2_headers(
             self.signer, self.creds, request_args, timestamp=self._get_timestamp()
         )
-
-    # ------------------------------------------------------------------
-    # Public (L0) endpoints
-    # ------------------------------------------------------------------
 
     def get_ok(self):
         return self._get(f"{self.host}/")
@@ -469,10 +447,6 @@ class ClobClient:
             results.extend(response["data"])
         return results
 
-    # ------------------------------------------------------------------
-    # L1 Auth endpoints (require signer / private key)
-    # ------------------------------------------------------------------
-
     def create_api_key(self, nonce: int = None) -> ApiCreds:
         headers = self._l1_headers(nonce=nonce)
         resp = self._post(f"{self.host}{CREATE_API_KEY}", headers=headers)
@@ -499,10 +473,6 @@ class ClobClient:
         except Exception:
             pass
         return self.derive_api_key(nonce=nonce)
-
-    # ------------------------------------------------------------------
-    # L2 Auth endpoints (require signer + creds)
-    # ------------------------------------------------------------------
 
     def get_api_keys(self):
         headers = self._l2_headers("GET", GET_API_KEYS)
@@ -674,10 +644,6 @@ class ClobClient:
                 p["token_id"] = params.token_id
         return self._get(f"{self.host}{UPDATE_BALANCE_ALLOWANCE}", headers=headers, params=p)
 
-    # ------------------------------------------------------------------
-    # Order creation
-    # ------------------------------------------------------------------
-
     def create_order(
         self,
         order_args: OrderArgsV2,
@@ -815,10 +781,6 @@ class ClobClient:
             )
         )
 
-    # ------------------------------------------------------------------
-    # Order posting
-    # ------------------------------------------------------------------
-
     def post_order(
         self,
         order,
@@ -872,10 +834,6 @@ class ClobClient:
 
         return res
 
-    # ------------------------------------------------------------------
-    # Order cancellation
-    # ------------------------------------------------------------------
-
     def cancel_order(self, payload: OrderPayload):
         self.assert_level_2_auth()
         body = {"orderID": payload.orderID}
@@ -909,10 +867,6 @@ class ClobClient:
         )
         return self._delete(f"{self.host}{CANCEL_MARKET_ORDERS}", headers=headers, data=serialized)
 
-    # ------------------------------------------------------------------
-    # Order scoring
-    # ------------------------------------------------------------------
-
     def is_order_scoring(self, params: OrderScoringParams = None):
         self.assert_level_2_auth()
         headers = self._l2_headers("GET", IS_ORDER_SCORING)
@@ -929,10 +883,6 @@ class ClobClient:
             "POST", ARE_ORDERS_SCORING, body=order_ids, serialized_body=serialized
         )
         return self._post(f"{self.host}{ARE_ORDERS_SCORING}", headers=headers, data=serialized)
-
-    # ------------------------------------------------------------------
-    # Rewards
-    # ------------------------------------------------------------------
 
     def get_earnings_for_user_for_day(self, date: str) -> list:
         self.assert_level_2_auth()
@@ -998,10 +948,6 @@ class ClobClient:
             f"{self.host}{GET_LIQUIDITY_REWARD_PERCENTAGES}", headers=headers, params=p
         )
 
-    # ------------------------------------------------------------------
-    # Builder API keys
-    # ------------------------------------------------------------------
-
     def create_builder_api_key(self):
         self.assert_level_2_auth()
         headers = self._l2_headers("POST", CREATE_BUILDER_API_KEY)
@@ -1011,10 +957,6 @@ class ClobClient:
         self.assert_level_2_auth()
         headers = self._l2_headers("GET", GET_BUILDER_API_KEYS)
         return self._get(f"{self.host}{GET_BUILDER_API_KEYS}", headers=headers)
-
-    # ------------------------------------------------------------------
-    # Private helpers
-    # ------------------------------------------------------------------
 
     def __resolve_tick_size(self, token_id: str, tick_size: TickSize = None) -> TickSize:
         min_tick_size = self.get_tick_size(token_id)

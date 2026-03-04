@@ -33,6 +33,7 @@ from .clob_types import (
     OrderScoring,
     BuilderTradeParams,
     OrderMarketCancelParams,
+    OrderPayload,
     BuilderApiKey,
     BuilderApiKeyResponse,
 )
@@ -74,6 +75,7 @@ __all__ = [
     "OrderScoring",
     "BuilderTradeParams",
     "OrderMarketCancelParams",
+    "OrderPayload",
     "BuilderApiKey",
     "BuilderApiKeyResponse",
 ]

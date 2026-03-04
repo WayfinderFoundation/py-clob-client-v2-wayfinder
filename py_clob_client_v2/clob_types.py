@@ -233,6 +233,11 @@ class OrdersScoringParams:
     orderIds: list
 
 
+@dataclass
+class OrderPayload:
+    orderID: str
+
+
 TickSize = Literal["0.1", "0.01", "0.001", "0.0001"]
 
 

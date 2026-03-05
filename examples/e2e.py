@@ -23,16 +23,16 @@ from py_clob_client_v2.clob_types import (
     OrderType,
     PartialCreateOrderOptions,
 )
-from py_clob_client_v2.constants import AMOY
+from py_clob_client_v2.constants import AMOY, POLYGON
 
 load_dotenv()
 
 AMOY_CONTRACTS = {
-    "collateral": "0x9c4e1703476e875070ee25b56a58b008cfb8fa78",
-    "conditionalTokens": "0x69308FB512518e39F9b16112fA8d994F4e2Bf8bB",
-    "exchangeV2": "0x4CAAb20932751c6b4c8C4EB0baB741824d5478Ac",
+    "collateral": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174",
+    "conditionalTokens": "0x4D97DCd97eC945f40cF65F87097ACe5EA0476045",
+    "exchangeV2": "0xF60CA007115A47A11295F053156d913D83fed095",
     "negRiskAdapter": "0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296",
-    "negRiskExchangeV2": "0xfa7B8Aa8bC85c805E532Ec54E4557f6A92730E4b",
+    "negRiskExchangeV2": "0x93f0A57b6F7D1e765cA2674ab2Ecb6Ff6406B3C3",
 }
 
 ERC20_ABI = [
@@ -113,7 +113,7 @@ GAMMA_API_URL = _env("GAMMA_API_URL")
 BALANCE_UPDATER_URL = os.getenv("BALANCE_UPDATER_URL", "")
 BUILDER_SERVICE_URL = os.getenv("BUILDER_SERVICE_URL", "")
 DOMAIN = os.getenv("DOMAIN", "polymarket.com")
-CHAIN_ID = AMOY
+CHAIN_ID = POLYGON
 CONDITION_ID = os.getenv(
     "CONDITION_ID",
     "0xbd5e4a45c3d9db4acae940913ec32a89fb6402c0475170e58b90fb499b73d7af",
@@ -133,10 +133,10 @@ ORDER_SIZE = float(os.getenv("ORDER_SIZE", "100"))
 COLLATERAL_TOKEN_ADDRESS = _env("COLLATERAL_TOKEN_ADDRESS")
 WRAPPER_ADDRESS = _env("WRAPPER_ADDRESS")
 
-MIN_COLLATERAL = 10_000 * 10**6
-MINT_AMOUNT = 1_000_000 * 10**6
+MIN_COLLATERAL = 9 * 10**6
+WRAP_AMOUNT = 9 * 10**6
 MAX_UINT256 = 2**256 - 1
-GAS_PRICE = Web3.to_wei(100, "gwei")
+GAS_PRICE = Web3.to_wei(200, "gwei")
 GAS_LIMIT = 500_000
 
 _any_key_freshly_created = False
@@ -150,10 +150,11 @@ def log(step: str, msg: str, data=None):
 
 
 def _build_tx(w3: Web3, from_addr: str, **kwargs) -> dict:
+    gas_price = int(w3.eth.gas_price * 1.3)  # 30% buffer over current network price
     return {
         "from": from_addr,
-        "nonce": w3.eth.get_transaction_count(from_addr),
-        "gasPrice": GAS_PRICE,
+        "nonce": w3.eth.get_transaction_count(from_addr, "pending"),
+        "gasPrice": gas_price,
         "gas": GAS_LIMIT,
         **kwargs,
     }
@@ -218,7 +219,7 @@ def gamma_login(private_key: str) -> str:
             f"{json_payload}:::{signature}".encode()
         ).decode()
 
-        login_res = client.post(
+        login_res = client.get(
             f"{GAMMA_API_URL}/login",
             headers={
                 "Authorization": f"Bearer {auth_token}",
@@ -269,28 +270,28 @@ def ensure_collateral(w3: Web3, private_key: str, label: str):
     if pmct_bal >= MIN_COLLATERAL:
         return
 
+    needed = WRAP_AMOUNT - pmct_bal  # how much more PMCT we need
     usdc_bal = usdc.functions.balanceOf(address).call()
-    if usdc_bal < MINT_AMOUNT:
-        log(label, f"Minting {MINT_AMOUNT / 10**6:.0f} USDC ...")
-        tx = usdc.functions.mint(address, MINT_AMOUNT).build_transaction(
-            _build_tx(w3, address)
-        )
-        _send_tx(w3, private_key, tx)
+    log(label, f"USDC balance: {usdc_bal / 10**6:.6f}")
+    to_wrap = min(needed, usdc_bal)
+    if to_wrap <= 0:
+        raise RuntimeError(f"{label}: no USDC available to wrap")
 
     wrapper_allow = usdc.functions.allowance(
         address, Web3.to_checksum_address(WRAPPER_ADDRESS)
     ).call()
-    if wrapper_allow < MINT_AMOUNT:
+    if wrapper_allow < to_wrap:
+        log(label, f"Approving USDC -> Wrapper ...")
         tx = usdc.functions.approve(
             Web3.to_checksum_address(WRAPPER_ADDRESS), MAX_UINT256
         ).build_transaction(_build_tx(w3, address))
         _send_tx(w3, private_key, tx)
 
-    log(label, f"Wrapping {MINT_AMOUNT / 10**6:.0f} USDC -> PMCT ...")
+    log(label, f"Wrapping {to_wrap / 10**6:.2f} USDC -> PMCT ...")
     tx = wrapper.functions.wrap(
         Web3.to_checksum_address(AMOY_CONTRACTS["collateral"]),
         address,
-        MINT_AMOUNT,
+        to_wrap,
     ).build_transaction(_build_tx(w3, address))
     _send_tx(w3, private_key, tx)
 

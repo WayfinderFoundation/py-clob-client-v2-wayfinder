@@ -239,8 +239,11 @@ class ClobClient:
         return self._get(f"{self.host}/")
 
     def get_version(self) -> int:
-        result = self._get(f"{self.host}{VERSION}")
-        return result.get("version", 2) if isinstance(result, dict) else 2
+        try:
+            result = self._get(f"{self.host}{VERSION}")
+            return result.get("version", 2) if isinstance(result, dict) else 2
+        except Exception:
+            return 2
 
     def get_server_time(self):
         return self._get(f"{self.host}{TIME}")

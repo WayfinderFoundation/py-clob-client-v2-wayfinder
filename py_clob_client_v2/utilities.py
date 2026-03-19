@@ -2,9 +2,6 @@ import hashlib
 import json
 
 from .clob_types import OrderBookSummary, OrderSummary, TickSize
-from .order_utils.model.side import Side, SideString
-from .order_utils.model.order_data_v1 import SignedOrderV1
-from .order_utils.model.order_data_v2 import SignedOrderV2
 
 
 def parse_raw_orderbook_summary(raw_obs: dict) -> OrderBookSummary:
@@ -50,61 +47,21 @@ def generate_orderbook_summary_hash(orderbook: OrderBookSummary) -> str:
     return h
 
 
-def order_to_json_v1(
-    order: SignedOrderV1,
-    owner: str,
-    order_type: str,
-    defer_exec: bool = False,
-) -> dict:
-    side = SideString.BUY if order.side == Side.BUY else SideString.SELL
-    return {
-        "order": {
-            "salt": int(order.salt),
-            "maker": order.maker,
-            "signer": order.signer,
-            "taker": order.taker,
-            "tokenId": order.tokenId,
-            "makerAmount": order.makerAmount,
-            "takerAmount": order.takerAmount,
-            "side": side,
-            "expiration": order.expiration,
-            "nonce": order.nonce,
-            "feeRateBps": order.feeRateBps,
-            "signatureType": int(order.signatureType),
-            "signature": order.signature,
-        },
-        "owner": owner,
-        "orderType": order_type,
-        "deferExec": defer_exec,
-    }
-
-
-def order_to_json_v2(
-    order: SignedOrderV2,
-    owner: str,
-    order_type: str,
-    defer_exec: bool = False,
-) -> dict:
-    side = SideString.BUY if order.side == Side.BUY else SideString.SELL
-    return {
-        "order": {
-            "salt": int(order.salt),
-            "maker": order.maker,
-            "signer": order.signer,
-            "tokenId": order.tokenId,
-            "makerAmount": order.makerAmount,
-            "takerAmount": order.takerAmount,
-            "side": side,
-            "signatureType": int(order.signatureType),
-            "timestamp": order.timestamp,
-            "metadata": order.metadata,
-            "builder": order.builder,
-            "signature": order.signature,
-        },
-        "owner": owner,
-        "orderType": order_type,
-        "deferExec": defer_exec,
-    }
+def adjust_market_buy_amount(
+    amount: float,
+    user_usdc_balance: float,
+    price: float,
+    fee_rate: float,
+    fee_exponent: int,
+    builder_taker_fee_rate: float = 0,
+) -> float:
+    """Return fee-adjusted amount for a market buy, or the original amount if balance is sufficient."""
+    platform_fee_rate = fee_rate * (price * (1 - price)) ** fee_exponent
+    platform_fee = (amount / price) * platform_fee_rate
+    total_cost = amount + platform_fee + amount * builder_taker_fee_rate
+    if user_usdc_balance <= total_cost:
+        return user_usdc_balance / (1 + platform_fee_rate / price + builder_taker_fee_rate)
+    return amount
 
 
 def is_tick_size_smaller(a: TickSize, b: TickSize) -> bool:

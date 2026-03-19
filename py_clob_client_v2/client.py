@@ -106,12 +106,13 @@ from .clob_types import RequestArgs
 from .rfq import RfqClient
 from .signer import Signer
 from .utilities import (
+    adjust_market_buy_amount,
     generate_orderbook_summary_hash,
     is_tick_size_smaller,
-    order_to_json_v1,
-    order_to_json_v2,
     price_valid,
 )
+from .order_utils.model.order_data_v1 import order_to_json_v1
+from .order_utils.model.order_data_v2 import order_to_json_v2
 
 logger = logging.getLogger(__name__)
 
@@ -129,13 +130,11 @@ class ClobClient:
         signature_type: int = None,
         funder: str = None,
         builder_config: BuilderConfig = None,
-        geo_block_token: str = None,
         use_server_time: bool = False,
         retry_on_error: bool = False,
     ):
         self.host = host.rstrip("/")
         self.chain_id = chain_id
-        self.geo_block_token = geo_block_token
         self.use_server_time = use_server_time
         self.retry_on_error = retry_on_error
         self.builder_config = builder_config
@@ -186,26 +185,20 @@ class ClobClient:
         self.creds = creds
         self.mode = self._get_client_mode()
 
-    def _geo_params(self, params: dict = None) -> dict:
-        p = params or {}
-        if self.geo_block_token:
-            p = {**p, "geo_block_token": self.geo_block_token}
-        return p or None
-
     def _get(self, endpoint: str, headers=None, params: dict = None):
-        return get(endpoint, headers=headers, params=self._geo_params(params))
+        return get(endpoint, headers=headers, params=params)
 
     def _post(self, endpoint: str, headers=None, data=None, params: dict = None):
         return post(
             endpoint,
             headers=headers,
             data=data,
-            params=self._geo_params(params),
+            params=params,
             retry_on_error=self.retry_on_error,
         )
 
     def _delete(self, endpoint: str, headers=None, data=None, params: dict = None):
-        return delete(endpoint, headers=headers, data=data, params=self._geo_params(params))
+        return delete(endpoint, headers=headers, data=data, params=params)
 
     def _get_timestamp(self) -> Optional[int]:
         if not self.use_server_time:
@@ -722,32 +715,20 @@ class ClobClient:
 
         # Fee-adjusted amount for market buy orders
         if order_args.side == "BUY" and order_args.user_usdc_balance:
-            price = order_args.price
             builder_code = getattr(order_args, "builder_code", BYTES32_ZERO)
             builder_taker_fee_rate = (
                 self.__builder_fee_rates.get(token_id, {}).get("taker", 0)
                 if builder_code and builder_code != BYTES32_ZERO
                 else 0
             )
-            platform_fee_rate = self._calculate_platform_fee_rate(
-                price,
+            order_args.amount = adjust_market_buy_amount(
+                order_args.amount,
+                order_args.user_usdc_balance,
+                order_args.price,
                 self.__fee_rates.get(token_id, 0),
                 self.__fee_exponents.get(token_id, 0),
+                builder_taker_fee_rate,
             )
-            platform_fee = (order_args.amount / price) * platform_fee_rate
-            total_cost = (
-                order_args.amount
-                + platform_fee
-                + order_args.amount * builder_taker_fee_rate
-            )
-            if order_args.user_usdc_balance <= total_cost:
-                order_args.amount = self._calculate_fee_adjusted_amount(
-                    order_args.user_usdc_balance,
-                    price,
-                    self.__fee_rates.get(token_id, 0),
-                    self.__fee_exponents.get(token_id, 0),
-                    builder_taker_fee_rate,
-                )
 
         neg_risk = (
             options.neg_risk
@@ -992,22 +973,6 @@ class ClobClient:
             self.__token_condition_map[token_id] = result["condition_id"]
 
         self.get_clob_market_info(self.__token_condition_map[token_id])
-
-    def _calculate_platform_fee_rate(
-        self, price: float, fee_rate: float, fee_exponent: int
-    ) -> float:
-        return fee_rate * (price * (1 - price)) ** fee_exponent
-
-    def _calculate_fee_adjusted_amount(
-        self,
-        budget: float,
-        price: float,
-        fee_rate: float,
-        fee_exponent: int,
-        builder_taker_fee_rate: float = 0,
-    ) -> float:
-        platform_fee_rate = self._calculate_platform_fee_rate(price, fee_rate, fee_exponent)
-        return budget / (1 + platform_fee_rate / price + builder_taker_fee_rate)
 
     def _is_order_version_mismatch(self, resp) -> bool:
         if not isinstance(resp, dict):

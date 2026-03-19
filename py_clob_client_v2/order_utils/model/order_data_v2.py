@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Optional
 
-from .side import Side
+from .side import Side, SideString
 from .signature_type_v2 import SignatureTypeV2
 
 
@@ -43,3 +43,31 @@ class SignedOrderV2(OrderV2):
     """A signed V2 order including the EIP712 signature."""
 
     signature: str = ""
+
+
+def order_to_json_v2(
+    order: "SignedOrderV2",
+    owner: str,
+    order_type: str,
+    defer_exec: bool = False,
+) -> dict:
+    side = SideString.BUY if order.side == Side.BUY else SideString.SELL
+    return {
+        "order": {
+            "salt": int(order.salt),
+            "maker": order.maker,
+            "signer": order.signer,
+            "tokenId": order.tokenId,
+            "makerAmount": order.makerAmount,
+            "takerAmount": order.takerAmount,
+            "side": side,
+            "signatureType": int(order.signatureType),
+            "timestamp": order.timestamp,
+            "metadata": order.metadata,
+            "builder": order.builder,
+            "signature": order.signature,
+        },
+        "owner": owner,
+        "orderType": order_type,
+        "deferExec": defer_exec,
+    }

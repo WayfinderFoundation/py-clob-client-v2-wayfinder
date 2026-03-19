@@ -6,10 +6,10 @@ from py_clob_client_v2.order_builder.builder import OrderBuilder
 from py_clob_client_v2.order_builder.constants import BUY, SELL
 from py_clob_client_v2.order_utils.model import SignedOrderV2, Side, SignatureTypeV2
 from py_clob_client_v2.signer import Signer
+from py_clob_client_v2.order_utils.model.order_data_v2 import order_to_json_v2
 from py_clob_client_v2.utilities import (
     generate_orderbook_summary_hash,
     is_tick_size_smaller,
-    order_to_json_v2,
     parse_raw_orderbook_summary,
     price_valid,
 )

@@ -13,6 +13,7 @@ from py_clob_client_v2.order_builder.constants import BUY, SELL
 from py_clob_client_v2.order_builder.helpers import decimal_places, round_down, round_normal
 from py_clob_client_v2.order_utils.model import Side, SignatureTypeV2
 from py_clob_client_v2.signer import Signer
+from py_clob_client_v2.utilities import adjust_market_buy_amount
 
 # publicly known private key
 private_key = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
@@ -641,88 +642,115 @@ class TestOrderBuilder(TestCase):
         self._assert_signed_order_v2(order)
         self.assertEqual(order.builder, builder_code)
 
-    def test_platform_fee_price_0_5(self):
-        self.assertAlmostEqual(_platform_fee(50, 0.5, 0.25, 2), 1.5625, places=6)
 
-    def test_platform_fee_price_0_3(self):
-        self.assertAlmostEqual(_platform_fee(30, 0.3, 0.25, 2), 1.1025, places=6)
+class TestAdjustMarketBuyAmount(TestCase):
 
-    def test_platform_fee_price_0_1(self):
-        self.assertAlmostEqual(_platform_fee(10, 0.1, 0.25, 2), 0.2025, places=6)
+    def _total_cost(
+        self,
+        amount: float,
+        price: float,
+        fee_rate: float,
+        fee_exponent: int,
+        builder_rate: float = 0,
+    ) -> float:
+        """Total cost of spending `amount` USD at `price`, including all fees."""
+        platform_fee_rate = fee_rate * (price * (1 - price)) ** fee_exponent
+        platform_fee = (amount / price) * platform_fee_rate
+        return amount + platform_fee + amount * builder_rate
 
-    def test_platform_fee_price_0_05(self):
-        self.assertAlmostEqual(_platform_fee(5, 0.05, 0.25, 2), 0.05640625, places=6)
+    # --- conditional: no adjustment ---
 
-    def test_platform_fee_price_0_01(self):
-        self.assertAlmostEqual(_platform_fee(1, 0.01, 0.25, 2), 0.00245025, places=6)
+    def test_no_adjustment_when_balance_well_above_cost(self):
+        # balance far exceeds total cost — amount must come back unchanged
+        result = adjust_market_buy_amount(50, 200, 0.5, 0.25, 2)
+        self.assertEqual(result, 50)
 
-    def test_platform_fee_symmetric_0_7(self):
-        # price=0.7 is symmetric with price=0.3
-        self.assertAlmostEqual(_platform_fee(70, 0.7, 0.25, 2), 1.1025, places=6)
+    def test_no_adjustment_when_balance_just_above_cost(self):
+        amount, price, fee_rate, fee_exponent = 50, 0.5, 0.25, 2
+        total = self._total_cost(amount, price, fee_rate, fee_exponent)
+        result = adjust_market_buy_amount(amount, total + 1e-9, price, fee_rate, fee_exponent)
+        self.assertEqual(result, amount)
 
-    def test_platform_fee_symmetric_0_9(self):
-        # price=0.9 is symmetric with price=0.1
-        self.assertAlmostEqual(_platform_fee(90, 0.9, 0.25, 2), 0.2025, places=6)
+    def test_no_adjustment_with_builder_fee_when_balance_above_cost(self):
+        amount, price, fee_rate, fee_exponent, builder_rate = 50, 0.5, 0.25, 2, 0.01
+        total = self._total_cost(amount, price, fee_rate, fee_exponent, builder_rate)
+        result = adjust_market_buy_amount(amount, total + 1e-9, price, fee_rate, fee_exponent, builder_rate)
+        self.assertEqual(result, amount)
 
-    def test_platform_fee_symmetric_0_95(self):
-        self.assertAlmostEqual(_platform_fee(95, 0.95, 0.25, 2), 0.05640625, places=6)
+    # --- conditional: adjustment triggers ---
 
-    def test_platform_fee_symmetric_0_99(self):
-        self.assertAlmostEqual(_platform_fee(99, 0.99, 0.25, 2), 0.00245025, places=6)
+    def test_no_adjustment_when_balance_exactly_covers_cost(self):
+        # when balance == total_cost, the adjustment formula algebraically recovers the
+        # original amount — user can afford exactly amount + fees, so nothing changes
+        amount, price, fee_rate, fee_exponent = 50, 0.5, 0.25, 2
+        total = self._total_cost(amount, price, fee_rate, fee_exponent)
+        result = adjust_market_buy_amount(amount, total, price, fee_rate, fee_exponent)
+        self.assertAlmostEqual(result, amount, places=10)
 
-    def test_platform_fee_c_125_5(self):
-        self.assertAlmostEqual(_platform_fee(62.75, 0.5, 0.25, 2), 1.9609375, places=6)
+    def test_adjusts_when_balance_below_total_cost(self):
+        # balance < total_cost — must adjust downward
+        amount, price, fee_rate, fee_exponent = 50, 0.5, 0.25, 2
+        result = adjust_market_buy_amount(amount, 48.0, price, fee_rate, fee_exponent)
+        self.assertLess(result, amount)
 
-    def test_builder_fee_1pct(self):
-        # 1% on 100 tokens at 50c → fee = 0.5
-        self.assertAlmostEqual(_builder_fee(50, 0.01), 0.5, places=6)
+    # --- invariant: adjusted + fees(adjusted) == budget ---
 
-    def test_builder_fee_5pct(self):
-        # 5% on 200 tokens at 75c → fee = 7.5
-        self.assertAlmostEqual(_builder_fee(150, 0.05), 7.5, places=6)
-
-    def test_effective_platform_fee_only(self):
+    def test_invariant_platform_fee_only(self):
         budget, price, fee_rate, fee_exponent = 50, 0.5, 0.25, 2
-        effective = _calculate_effective(budget, price, fee_rate, fee_exponent)
-        platform_fee = _platform_fee(effective, price, fee_rate, fee_exponent)
-        self.assertAlmostEqual(effective + platform_fee, budget, places=10)
+        result = adjust_market_buy_amount(budget, budget, price, fee_rate, fee_exponent)
+        self.assertAlmostEqual(
+            self._total_cost(result, price, fee_rate, fee_exponent), budget, places=10
+        )
 
-    def test_effective_builder_fee_only(self):
+    def test_invariant_builder_fee_only(self):
         budget, price, builder_rate = 50, 0.5, 0.01
-        effective = _calculate_effective(budget, price, 0, 0, builder_rate)
-        builder_fee = _builder_fee(effective, builder_rate)
-        self.assertAlmostEqual(effective + builder_fee, budget, places=10)
+        result = adjust_market_buy_amount(budget, budget, price, 0, 0, builder_rate)
+        self.assertAlmostEqual(
+            self._total_cost(result, price, 0, 0, builder_rate), budget, places=10
+        )
 
-    def test_effective_combined_fees(self):
+    def test_invariant_combined_fees(self):
         budget, price, fee_rate, fee_exponent, builder_rate = 50, 0.5, 0.25, 2, 0.01
-        effective = _calculate_effective(budget, price, fee_rate, fee_exponent, builder_rate)
-        platform_fee = _platform_fee(effective, price, fee_rate, fee_exponent)
-        builder_fee = _builder_fee(effective, builder_rate)
-        self.assertAlmostEqual(effective + platform_fee + builder_fee, budget, places=10)
+        result = adjust_market_buy_amount(budget, budget, price, fee_rate, fee_exponent, builder_rate)
+        self.assertAlmostEqual(
+            self._total_cost(result, price, fee_rate, fee_exponent, builder_rate), budget, places=10
+        )
 
-    def test_combined_platform_and_builder_fee(self):
-        price, contracts, fee_rate, fee_exponent, builder_rate = 0.5, 100, 0.25, 2, 0.01
-        amount_usd = contracts * price
-        platform_fee = _platform_fee(amount_usd, price, fee_rate, fee_exponent)
-        builder_fee = _builder_fee(amount_usd, builder_rate)
-        self.assertAlmostEqual(platform_fee, 1.5625, places=6)
-        self.assertAlmostEqual(builder_fee, 0.5, places=6)
-        self.assertAlmostEqual(platform_fee + builder_fee, 2.0625, places=6)
+    def test_invariant_various_prices(self):
+        budget, fee_rate, fee_exponent = 50, 0.25, 2
+        for price in [0.05, 0.1, 0.3, 0.5, 0.7, 0.9, 0.95]:
+            result = adjust_market_buy_amount(budget, budget, price, fee_rate, fee_exponent)
+            self.assertAlmostEqual(
+                self._total_cost(result, price, fee_rate, fee_exponent),
+                budget,
+                places=10,
+                msg=f"invariant failed at price={price}",
+            )
 
-# Fee math helpers
-def _platform_fee(amount_usd: float, price: float, fee_rate: float, fee_exponent: int) -> float:
-    platform_fee_rate = fee_rate * (price * (1 - price)) ** fee_exponent
-    return (amount_usd / price) * platform_fee_rate
+    def test_invariant_various_budgets(self):
+        price, fee_rate, fee_exponent = 0.5, 0.25, 2
+        for budget in [1.0, 10.0, 50.0, 100.0, 1000.0]:
+            result = adjust_market_buy_amount(budget, budget, price, fee_rate, fee_exponent)
+            self.assertAlmostEqual(
+                self._total_cost(result, price, fee_rate, fee_exponent),
+                budget,
+                places=10,
+                msg=f"invariant failed at budget={budget}",
+            )
 
-def _builder_fee(amount_usd: float, builder_taker_fee_rate: float) -> float:
-    return amount_usd * builder_taker_fee_rate
+    # --- edge cases ---
 
-def _calculate_effective(
-    budget: float,
-    price: float,
-    fee_rate: float,
-    fee_exponent: int,
-    builder_taker_fee_rate: float = 0,
-) -> float:
-    platform_fee_rate = fee_rate * (price * (1 - price)) ** fee_exponent
-    return budget / (1 + platform_fee_rate / price + builder_taker_fee_rate)
+    def test_zero_fees_no_adjustment_to_amount(self):
+        # with no fees, total_cost == amount == balance → triggers, but result == budget
+        result = adjust_market_buy_amount(50, 50, 0.5, 0, 0)
+        self.assertAlmostEqual(result, 50, places=10)
+
+    def test_adjusted_amount_less_than_original_when_fees_positive(self):
+        for fee_rate in [0.1, 0.25, 0.5]:
+            result = adjust_market_buy_amount(50, 50, 0.5, fee_rate, 2)
+            self.assertLess(result, 50, msg=f"expected downward adjustment for fee_rate={fee_rate}")
+
+    def test_higher_fee_produces_lower_adjusted_amount(self):
+        r_low = adjust_market_buy_amount(50, 50, 0.5, 0.10, 2)
+        r_high = adjust_market_buy_amount(50, 50, 0.5, 0.50, 2)
+        self.assertGreater(r_low, r_high)

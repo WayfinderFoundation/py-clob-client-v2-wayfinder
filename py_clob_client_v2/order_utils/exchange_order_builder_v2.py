@@ -71,6 +71,7 @@ class ExchangeOrderBuilderV2:
             ),
             metadata=order_data.metadata if order_data.metadata else BYTES32_ZERO,
             builder=order_data.builder if order_data.builder else BYTES32_ZERO,
+            expiration=order_data.expiration if order_data.expiration else "0",
         )
 
     def build_order_typed_data(self, order: OrderV2) -> dict:

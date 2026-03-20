@@ -183,6 +183,7 @@ class OrderBuilder:
                 timestamp=ts,
                 metadata=getattr(order_args, "metadata", BYTES32_ZERO),
                 builder=order_args.builder_code,
+                expiration=str(getattr(order_args, "expiration", 0)),
             )
             builder = ExchangeOrderBuilderV2(
                 exchange_address, self.signer.get_chain_id(), self.signer

@@ -82,6 +82,9 @@ class OrderArgsV2:
     side: str
     """Side of the order"""
 
+    expiration: int = 0
+    """Timestamp after which the order is expired (0 = no expiration)"""
+
     builder_code: str = BYTES32_ZERO
     """Builder code (bytes32) for builder fee attribution"""
 

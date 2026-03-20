@@ -19,6 +19,7 @@ class OrderDataV2:
     timestamp: Optional[str] = None
     metadata: Optional[str] = None
     builder: Optional[str] = None
+    expiration: Optional[str] = None
 
 
 @dataclass
@@ -36,6 +37,7 @@ class OrderV2:
     timestamp: str
     metadata: str
     builder: str
+    expiration: str = "0"
 
 
 @dataclass
@@ -61,6 +63,7 @@ def order_to_json_v2(
             "makerAmount": order.makerAmount,
             "takerAmount": order.takerAmount,
             "side": side,
+            "expiration": order.expiration,
             "signatureType": int(order.signatureType),
             "timestamp": order.timestamp,
             "metadata": order.metadata,

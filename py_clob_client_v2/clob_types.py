@@ -315,6 +315,26 @@ class FeeDetails:
 
 
 @dataclass
+class FeeInfo:
+    rate: float = 0.0
+    exponent: float = 0.0
+
+
+@dataclass
+class BuilderFeeRate:
+    maker: float = 0.0
+    taker: float = 0.0
+
+
+@dataclass
+class BuilderCode:
+    code: str = ""
+    builder_maker_fee_rate_bps: int = 0
+    builder_taker_fee_rate_bps: int = 0
+    enabled: bool = False
+
+
+@dataclass
 class ClobToken:
     """A YES or NO token in a CLOB market"""
 
@@ -341,11 +361,11 @@ class MarketDetails:
     fee_details: Optional[FeeDetails] = None
     """Platform fee details"""
 
-    builder_maker_fee: Optional[float] = None
-    """Builder maker fee rate"""
+    maker_base_fee: Optional[float] = None
+    """V1 maker base fee rate (from mbf field); not used for builder fee rate calculation"""
 
-    builder_taker_fee: Optional[float] = None
-    """Builder taker fee rate"""
+    taker_base_fee: Optional[float] = None
+    """V1 taker base fee rate (from tbf field); not used for builder fee rate calculation"""
 
 
 @dataclass

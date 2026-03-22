@@ -1,5 +1,6 @@
 import hashlib
 import json
+from decimal import Decimal
 
 from .clob_types import OrderBookSummary, OrderSummary, TickSize
 
@@ -52,15 +53,23 @@ def adjust_market_buy_amount(
     user_usdc_balance: float,
     price: float,
     fee_rate: float,
-    fee_exponent: int,
+    fee_exponent: float,
     builder_taker_fee_rate: float = 0,
 ) -> float:
     """Return fee-adjusted amount for a market buy, or the original amount if balance is sufficient."""
     platform_fee_rate = fee_rate * (price * (1 - price)) ** fee_exponent
-    platform_fee = (amount / price) * platform_fee_rate
-    total_cost = amount + platform_fee + amount * builder_taker_fee_rate
-    if user_usdc_balance <= total_cost:
-        return user_usdc_balance / (1 + platform_fee_rate / price + builder_taker_fee_rate)
+
+    d_amount = Decimal(str(amount))
+    d_price = Decimal(str(price))
+    d_balance = Decimal(str(user_usdc_balance))
+    d_pfr = Decimal(str(platform_fee_rate))
+    d_btr = Decimal(str(builder_taker_fee_rate))
+
+    platform_fee = d_amount / d_price * d_pfr
+    total_cost = d_amount + platform_fee + d_amount * d_btr
+    if d_balance <= total_cost:
+        divisor = Decimal("1") + d_pfr / d_price + d_btr
+        return float(d_balance / divisor)
     return amount
 
 

@@ -8,6 +8,7 @@ from py_clob_client_v2.order_utils.model import SignedOrderV2, Side, SignatureTy
 from py_clob_client_v2.signer import Signer
 from py_clob_client_v2.order_utils.model.order_data_v2 import order_to_json_v2
 from py_clob_client_v2.utilities import (
+    adjust_market_buy_amount,
     generate_orderbook_summary_hash,
     is_tick_size_smaller,
     parse_raw_orderbook_summary,
@@ -213,6 +214,89 @@ class TestUtilities(TestCase):
         self.assertTrue(is_tick_size_smaller("0.0001", "0.001"))
         self.assertFalse(is_tick_size_smaller("0.1", "0.01"))
         self.assertFalse(is_tick_size_smaller("0.1", "0.1"))
+
+    def test_adjust_market_buy_amount_sufficient_balance(self):
+        # balance > total_cost: original amount returned unchanged
+        result = adjust_market_buy_amount(
+            amount=10.0,
+            user_usdc_balance=100.0,
+            price=0.5,
+            fee_rate=0.25,
+            fee_exponent=2.0,
+        )
+        self.assertEqual(result, 10.0)
+
+    def test_adjust_market_buy_amount_platform_fee_only(self):
+        # invariant: effective + platform_fee == budget (within 1e-10)
+        budget = 50.0
+        price = 0.5
+        fee_rate = 0.25
+        fee_exponent = 2.0
+        effective = adjust_market_buy_amount(
+            amount=100.0,
+            user_usdc_balance=budget,
+            price=price,
+            fee_rate=fee_rate,
+            fee_exponent=fee_exponent,
+        )
+        platform_fee_rate = fee_rate * (price * (1 - price)) ** fee_exponent
+        platform_fee = (effective / price) * platform_fee_rate
+        self.assertAlmostEqual(effective + platform_fee, budget, delta=1e-10)
+
+    def test_adjust_market_buy_amount_builder_fee_only(self):
+        # invariant: effective + builder_fee == budget (within 1e-10)
+        budget = 50.0
+        price = 0.5
+        builder_taker_fee_rate = 0.01
+        effective = adjust_market_buy_amount(
+            amount=100.0,
+            user_usdc_balance=budget,
+            price=price,
+            fee_rate=0,
+            fee_exponent=0,
+            builder_taker_fee_rate=builder_taker_fee_rate,
+        )
+        builder_fee = effective * builder_taker_fee_rate
+        self.assertAlmostEqual(effective + builder_fee, budget, delta=1e-10)
+
+    def test_adjust_market_buy_amount_combined_fees(self):
+        # invariant: effective + platform_fee + builder_fee == budget (within 1e-10)
+        budget = 50.0
+        price = 0.5
+        fee_rate = 0.25
+        fee_exponent = 2.0
+        builder_taker_fee_rate = 0.01
+        effective = adjust_market_buy_amount(
+            amount=100.0,
+            user_usdc_balance=budget,
+            price=price,
+            fee_rate=fee_rate,
+            fee_exponent=fee_exponent,
+            builder_taker_fee_rate=builder_taker_fee_rate,
+        )
+        platform_fee_rate = fee_rate * (price * (1 - price)) ** fee_exponent
+        platform_fee = (effective / price) * platform_fee_rate
+        builder_fee = effective * builder_taker_fee_rate
+        self.assertAlmostEqual(effective + platform_fee + builder_fee, budget, delta=1e-10)
+
+    def test_adjust_market_buy_amount_exactly_at_limit(self):
+        # balance == total_cost triggers the adjustment path
+        price = 0.5
+        fee_rate = 0.25
+        fee_exponent = 2.0
+        platform_fee_rate = fee_rate * (price * (1 - price)) ** fee_exponent
+        amount = 48.484848484848484
+        platform_fee = (amount / price) * platform_fee_rate
+        budget = amount + platform_fee  # exactly at limit
+        effective = adjust_market_buy_amount(
+            amount=amount,
+            user_usdc_balance=budget,
+            price=price,
+            fee_rate=fee_rate,
+            fee_exponent=fee_exponent,
+        )
+        recalc_fee = (effective / price) * platform_fee_rate
+        self.assertAlmostEqual(effective + recalc_fee, budget, delta=1e-10)
 
     def test_price_valid(self):
         self.assertTrue(price_valid(0.5, "0.1"))

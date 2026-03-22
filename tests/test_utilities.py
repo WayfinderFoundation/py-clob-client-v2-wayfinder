@@ -279,6 +279,26 @@ class TestUtilities(TestCase):
         builder_fee = effective * builder_taker_fee_rate
         self.assertAlmostEqual(effective + platform_fee + builder_fee, budget, delta=1e-10)
 
+    def test_adjust_market_buy_amount_price_near_boundary(self):
+        # price near minimum tick (0.0001) — pfr/price quotient is large, float errors compound
+        budget = 50.0
+        price = 0.0001
+        fee_rate = 0.25
+        fee_exponent = 2.0
+        builder_taker_fee_rate = 0.01
+        effective = adjust_market_buy_amount(
+            amount=100.0,
+            user_usdc_balance=budget,
+            price=price,
+            fee_rate=fee_rate,
+            fee_exponent=fee_exponent,
+            builder_taker_fee_rate=builder_taker_fee_rate,
+        )
+        platform_fee_rate = fee_rate * (price * (1 - price)) ** fee_exponent
+        platform_fee = (effective / price) * platform_fee_rate
+        builder_fee = effective * builder_taker_fee_rate
+        self.assertAlmostEqual(effective + platform_fee + builder_fee, budget, delta=1e-10)
+
     def test_adjust_market_buy_amount_exactly_at_limit(self):
         # balance == total_cost triggers the adjustment path
         price = 0.5

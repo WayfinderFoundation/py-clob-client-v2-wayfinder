@@ -362,10 +362,10 @@ class MarketDetails:
     """Platform fee details"""
 
     maker_base_fee: Optional[float] = None
-    """V1 maker base fee rate (from mbf field); not used for builder fee rate calculation"""
+    """V1 maker base fee rate (from mbf field)"""
 
     taker_base_fee: Optional[float] = None
-    """V1 taker base fee rate (from tbf field); not used for builder fee rate calculation"""
+    """V1 taker base fee rate (from tbf field)"""
 
 
 @dataclass

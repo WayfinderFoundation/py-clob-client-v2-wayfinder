@@ -970,11 +970,14 @@ class ClobClient:
             return
         if builder_code in self.__builder_fee_rates:
             return
-        result = self._get(f"{self.host}{GET_BUILDER_FEE_RATE}{builder_code}")
-        self.__builder_fee_rates[builder_code] = BuilderFeeRate(
-            maker=result.get("builder_maker_fee_rate_bps", 0) / BUILDER_FEES_BPS,
-            taker=result.get("builder_taker_fee_rate_bps", 0) / BUILDER_FEES_BPS,
-        )
+        try:
+            result = self._get(f"{self.host}{GET_BUILDER_FEE_RATE}{builder_code}")
+            self.__builder_fee_rates[builder_code] = BuilderFeeRate(
+                maker=result.get("builder_maker_fee_rate_bps", 0) / BUILDER_FEES_BPS,
+                taker=result.get("builder_taker_fee_rate_bps", 0) / BUILDER_FEES_BPS,
+            )
+        except Exception:
+            self.__builder_fee_rates[builder_code] = BuilderFeeRate(maker=0, taker=0)
 
     def __ensure_market_info_cached(self, token_id: str):
         if token_id in self.__fee_infos:

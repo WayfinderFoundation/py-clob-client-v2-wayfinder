@@ -316,8 +316,8 @@ class FeeDetails:
 
 @dataclass
 class FeeInfo:
-    rate: Optional[float] = None
-    exponent: Optional[float] = None
+    rate: float = 0.0
+    exponent: float = 0.0
 
 
 @dataclass

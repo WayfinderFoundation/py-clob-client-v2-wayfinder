@@ -156,7 +156,6 @@ class ClobClient:
         self.__tick_sizes: dict = {}
         self.__neg_risk: dict = {}
         self.__fee_infos: dict = {}
-        self.__market_info_fetched: set = set()
         self.__builder_fee_rates: dict = {}
         self.__token_condition_map: dict = {}
         self.__cached_version: Optional[int] = None
@@ -286,13 +285,10 @@ class ClobClient:
             self.__neg_risk[token_id] = result["nr"]
 
             fd = result.get("fd") or {}
-            fi = self.__fee_infos.get(token_id, FeeInfo())
-            if fd.get("r") is not None:
-                fi.rate = fd["r"]
-            if fd.get("e") is not None:
-                fi.exponent = fd["e"]
-            self.__fee_infos[token_id] = fi
-            self.__market_info_fetched.add(token_id)
+            self.__fee_infos[token_id] = FeeInfo(
+                rate=fd.get("r", 0.0),
+                exponent=fd.get("e", 0.0),
+            )
 
         return result
 
@@ -336,30 +332,24 @@ class ClobClient:
         return self.__neg_risk[token_id]
 
     def get_fee_rate_bps(self, token_id: str) -> float:
-        fi = self.__fee_infos.get(token_id)
-        if fi is not None and fi.rate is not None:
-            return fi.rate
+        if token_id in self.__fee_infos:
+            return self.__fee_infos[token_id].rate
 
         if token_id in self.__token_condition_map:
             self.get_clob_market_info(self.__token_condition_map[token_id])
-            rate = self.__fee_infos[token_id].rate
-            return rate if rate is not None else 0.0
+            return self.__fee_infos[token_id].rate
 
         result = self._get(
             f"{self.host}{GET_FEE_RATE}", params={"token_id": token_id}
         )
-        fi = self.__fee_infos.get(token_id) or FeeInfo()
-        fi.rate = result["base_fee"]
-        self.__fee_infos[token_id] = fi
-        return fi.rate
+        self.__fee_infos[token_id] = FeeInfo(rate=result["base_fee"], exponent=0.0)
+        return self.__fee_infos[token_id].rate
 
     def get_fee_exponent(self, token_id: str) -> float:
-        fi = self.__fee_infos.get(token_id)
-        if fi is not None and fi.exponent is not None:
-            return fi.exponent
+        if token_id in self.__fee_infos:
+            return self.__fee_infos[token_id].exponent
         self.__ensure_market_info_cached(token_id)
-        exponent = self.__fee_infos.get(token_id, FeeInfo()).exponent
-        return exponent if exponent is not None else 0.0
+        return self.__fee_infos[token_id].exponent
 
     def get_midpoint(self, token_id: str):
         return self._get(f"{self.host}{GET_MIDPOINT}", params={"token_id": token_id})
@@ -985,7 +975,7 @@ class ClobClient:
             logging.warning("failed to fetch builder fee rate for %s, will retry on next order", builder_code)
 
     def __ensure_market_info_cached(self, token_id: str):
-        if token_id in self.__market_info_fetched:
+        if token_id in self.__fee_infos:
             return
 
         if token_id not in self.__token_condition_map:

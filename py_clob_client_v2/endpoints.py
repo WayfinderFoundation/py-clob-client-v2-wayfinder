@@ -78,6 +78,7 @@ GET_REWARDS_EARNINGS_PERCENTAGES = "/rewards/user/markets"
 # Builder endpoints
 POST_HEARTBEAT = "/v1/heartbeats"
 GET_BUILDER_TRADES = "/builder/trades"
+GET_BUILDER_FEE_RATE = "/fees/builder-fees/"
 
 # RFQ Endpoints
 CREATE_RFQ_REQUEST = "/rfq/request"

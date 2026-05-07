@@ -2,8 +2,8 @@ from datetime import datetime
 from typing import Optional
 
 from ..clob_types import ApiCreds, RequestArgs
-from ..signing.hmac import build_hmac_signature
 from ..signing.eip712 import sign_clob_auth_message
+from ..signing.hmac import build_hmac_signature
 from ..signer import Signer
 
 POLY_ADDRESS = "POLY_ADDRESS"
@@ -15,7 +15,7 @@ POLY_PASSPHRASE = "POLY_PASSPHRASE"
 
 
 async def create_level_1_headers(
-    signer: Signer, nonce: int = None, timestamp: Optional[int] = None
+    signer: Signer, nonce: Optional[int] = None, timestamp: Optional[int] = None
 ):
     """
     Creates Level 1 Poly headers for a request.

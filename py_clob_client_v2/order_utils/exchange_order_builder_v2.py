@@ -2,7 +2,6 @@ import dataclasses
 import time
 
 from eth_abi import encode as abi_encode
-from eth_account import Account
 from eth_account.messages import encode_typed_data
 from eth_utils import keccak as _keccak
 from py_order_utils.utils import prepend_zx
@@ -154,14 +153,11 @@ class ExchangeOrderBuilderV2:
 
     async def build_order_signature(self, typed_data: dict) -> str:
         if typed_data["message"]["signatureType"] == int(SignatureTypeV2.POLY_1271):
-            return self._build_poly_1271_order_signature(typed_data)
+            return await self._build_poly_1271_order_signature(typed_data)
 
         return prepend_zx(await self.signer.sign(self.build_order_hash(typed_data)))
 
-    def _build_poly_1271_order_signature(self, typed_data: dict) -> str:
-        if self.signer.private_key is None:
-            raise ValueError("POLY_1271 signing requires a private key signer")
-
+    async def _build_poly_1271_order_signature(self, typed_data: dict) -> str:
         message = typed_data["message"]
         contents_hash = _keccak(
             primitive=abi_encode(
@@ -222,8 +218,7 @@ class ExchangeOrderBuilderV2:
                 b"\x19\x01" + self.app_domain_separator + typed_data_sign_struct_hash
             )
         )
-        signed = Account._sign_hash(digest, private_key=self.signer.private_key)
-        inner_signature = signed.signature.hex()
+        inner_signature = await self.signer.sign("0x" + digest.hex())
         if inner_signature.startswith("0x"):
             inner_signature = inner_signature[2:]
 

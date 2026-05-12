@@ -1,3 +1,4 @@
+import asyncio
 from unittest import TestCase
 
 from py_clob_client_v2.config import get_contract_config
@@ -33,6 +34,10 @@ EXPECTED_POLY_1271_SIGNATURE = (
     "65547970652c75696e743235362074696d657374616d702c6279746573333220"
     "6d657461646174612c62797465733332206275696c6465722900ba"
 )
+
+
+def run_async(coro):
+    return asyncio.run(coro)
 
 
 def _poly_1271_order_data() -> OrderDataV2:
@@ -114,16 +119,44 @@ class TestExchangeOrderBuilderV2CTF(TestCase):
     def test_build_order_signature_poly_1271_matches_expected_signature(self):
         order = self.builder.build_order(_poly_1271_order_data())
         typed_data = self.builder.build_order_typed_data(order)
-        signature = self.builder.build_order_signature(typed_data)
+        signature = run_async(self.builder.build_order_signature(typed_data))
 
         expected_length = 2 + 130 + 64 + 64 + (len(ORDER_TYPE_STRING) * 2) + 4
         self.assertEqual(signature, EXPECTED_POLY_1271_SIGNATURE)
         self.assertEqual(len(signature), expected_length)
 
     def test_build_signed_order_poly_1271_matches_expected_signature(self):
-        signed = self.builder.build_signed_order(_poly_1271_order_data())
+        signed = run_async(self.builder.build_signed_order(_poly_1271_order_data()))
 
         self.assertEqual(signed.maker, DEPOSIT_WALLET)
         self.assertEqual(signed.signer, DEPOSIT_WALLET)
         self.assertEqual(signed.signatureType, SignatureTypeV2.POLY_1271)
         self.assertEqual(signed.signature, EXPECTED_POLY_1271_SIGNATURE)
+
+    def test_build_order_signature_poly_1271_uses_sign_callback(self):
+        calls = []
+
+        async def sign_callback(message_hash):
+            calls.append(message_hash)
+            return "0x" + "11" * 65
+
+        signer = Signer(
+            chain_id=CHAIN_ID,
+            address_override=SIGNER.address(),
+            sign_callback_override=sign_callback,
+        )
+        builder = ExchangeOrderBuilderV2(
+            CONTRACT_CONFIG.exchange_v2,
+            CHAIN_ID,
+            signer,
+            generate_salt=lambda: FIXED_SALT,
+        )
+        order = builder.build_order(_poly_1271_order_data())
+        typed_data = builder.build_order_typed_data(order)
+
+        signature = run_async(builder.build_order_signature(typed_data))
+
+        self.assertEqual(len(calls), 1)
+        self.assertTrue(calls[0].startswith("0x"))
+        self.assertEqual(len(calls[0]), 66)
+        self.assertTrue(signature.startswith("0x" + "11" * 65))

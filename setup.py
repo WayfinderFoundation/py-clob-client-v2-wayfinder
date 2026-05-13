@@ -6,7 +6,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="py_clob_client_v2_wayfinder",
-    version="1.0.1",
+    version="1.0.2",
     author="Wayfinder",
     description="Wayfinder fork of the Polymarket CLOBV2 Python client",
     long_description=long_description,
